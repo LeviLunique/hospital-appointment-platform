@@ -1,0 +1,41 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: scheduling-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/schedulingdb}
+    username: ${SPRING_DATASOURCE_USERNAME:scheduling}
+    password: ${SPRING_DATASOURCE_PASSWORD:scheduling}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+app:
+  kafka:
+    topics:
+      consulta-criada: ${KAFKA_TOPIC_CONSULTA_CRIADA:hospital.consultas.criadas.v1}
+      consulta-alterada: ${KAFKA_TOPIC_CONSULTA_ALTERADA:hospital.consultas.alteradas.v1}
+
+security:
+  jwt:
+    secret: ${JWT_SECRET:ZmFrZS1qd3Qtc2VjcmV0LXNob3VsZC1iZS1sb25nLWVuY29kZWQ=}
+    expiration-ms: ${JWT_EXPIRATION_MS:3600000}
+

@@ -1,0 +1,10 @@
+.git
+.docs
+.idea
+target
+**/target
+*.iml
+.DS_Store
+logs
+tmp
+

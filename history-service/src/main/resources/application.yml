@@ -1,0 +1,44 @@
+server:
+  port: ${SERVER_PORT:8081}
+
+spring:
+  application:
+    name: history-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/historydb}
+    username: ${SPRING_DATASOURCE_USERNAME:history}
+    password: ${SPRING_DATASOURCE_PASSWORD:history}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  graphql:
+    graphiql:
+      enabled: true
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    consumer:
+      group-id: history-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+app:
+  kafka:
+    topics:
+      consulta-criada: ${KAFKA_TOPIC_CONSULTA_CRIADA:hospital.consultas.criadas.v1}
+      consulta-alterada: ${KAFKA_TOPIC_CONSULTA_ALTERADA:hospital.consultas.alteradas.v1}
+
+security:
+  jwt:
+    secret: ${JWT_SECRET:ZmFrZS1qd3Qtc2VjcmV0LXNob3VsZC1iZS1sb25nLWVuY29kZWQ=}
+    expiration-ms: ${JWT_EXPIRATION_MS:3600000}
+

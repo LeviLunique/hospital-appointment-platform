@@ -1,0 +1,152 @@
+services:
+  scheduling-db:
+    image: postgres:16-alpine
+    container_name: ${SCHEDULING_DB_CONTAINER_NAME:-scheduling-db}
+    environment:
+      POSTGRES_DB: ${SCHEDULING_DB_NAME:-schedulingdb}
+      POSTGRES_USER: ${SCHEDULING_DB_USER:-scheduling}
+      POSTGRES_PASSWORD: ${SCHEDULING_DB_PASSWORD:-scheduling}
+    ports:
+      - "${SCHEDULING_DB_HOST_PORT:-5432}:${POSTGRES_CONTAINER_PORT:-5432}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SCHEDULING_DB_USER:-scheduling} -d ${SCHEDULING_DB_NAME:-schedulingdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  history-db:
+    image: postgres:16-alpine
+    container_name: ${HISTORY_DB_CONTAINER_NAME:-history-db}
+    environment:
+      POSTGRES_DB: ${HISTORY_DB_NAME:-historydb}
+      POSTGRES_USER: ${HISTORY_DB_USER:-history}
+      POSTGRES_PASSWORD: ${HISTORY_DB_PASSWORD:-history}
+    ports:
+      - "${HISTORY_DB_HOST_PORT:-5433}:${POSTGRES_CONTAINER_PORT:-5432}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${HISTORY_DB_USER:-history} -d ${HISTORY_DB_NAME:-historydb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  notification-db:
+    image: postgres:16-alpine
+    container_name: ${NOTIFICATION_DB_CONTAINER_NAME:-notification-db}
+    environment:
+      POSTGRES_DB: ${NOTIFICATION_DB_NAME:-notificationdb}
+      POSTGRES_USER: ${NOTIFICATION_DB_USER:-notification}
+      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD:-notification}
+    ports:
+      - "${NOTIFICATION_DB_HOST_PORT:-5434}:${POSTGRES_CONTAINER_PORT:-5432}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION_DB_USER:-notification} -d ${NOTIFICATION_DB_NAME:-notificationdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: ${KAFKA_IMAGE:-apache/kafka:3.9.1}
+    container_name: ${KAFKA_CONTAINER_NAME:-kafka}
+    environment:
+      KAFKA_NODE_ID: ${KAFKA_NODE_ID:-0}
+      KAFKA_PROCESS_ROLES: ${KAFKA_PROCESS_ROLES:-controller,broker}
+      KAFKA_CONTROLLER_QUORUM_VOTERS: ${KAFKA_CONTROLLER_QUORUM_VOTERS:-0@kafka:9093}
+      KAFKA_LISTENERS: ${KAFKA_LISTENERS:-PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094}
+      KAFKA_ADVERTISED_LISTENERS: ${KAFKA_ADVERTISED_LISTENERS:-PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: ${KAFKA_LISTENER_SECURITY_PROTOCOL_MAP:-CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT}
+      KAFKA_CONTROLLER_LISTENER_NAMES: ${KAFKA_CONTROLLER_LISTENER_NAMES:-CONTROLLER}
+      KAFKA_INTER_BROKER_LISTENER_NAME: ${KAFKA_INTER_BROKER_LISTENER_NAME:-PLAINTEXT}
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "${KAFKA_AUTO_CREATE_TOPICS_ENABLE:-true}"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: ${KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR:-1}
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: ${KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR:-1}
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: ${KAFKA_TRANSACTION_STATE_LOG_MIN_ISR:-1}
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: ${KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS:-0}
+    ports:
+      - "${KAFKA_EXTERNAL_PORT:-9094}:9094"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: ${KAFKA_UI_CONTAINER_NAME:-kafka-ui}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: ${KAFKA_UI_CLUSTER_NAME:-local}
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: ${KAFKA_INTERNAL_BOOTSTRAP_SERVERS:-kafka:9092}
+    ports:
+      - "${KAFKA_UI_PORT:-8090}:8080"
+
+  scheduling-service:
+    build:
+      context: .
+      dockerfile: scheduling-service/Dockerfile
+    container_name: ${SCHEDULING_CONTAINER_NAME:-scheduling-service}
+    depends_on:
+      scheduling-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: ${SCHEDULING_SERVICE_PORT:-8080}
+      SPRING_DATASOURCE_URL: ${SCHEDULING_DATASOURCE_URL:-jdbc:postgresql://scheduling-db:5432/schedulingdb}
+      SPRING_DATASOURCE_USERNAME: ${SCHEDULING_DB_USER:-scheduling}
+      SPRING_DATASOURCE_PASSWORD: ${SCHEDULING_DB_PASSWORD:-scheduling}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_INTERNAL_BOOTSTRAP_SERVERS:-kafka:9092}
+      KAFKA_TOPIC_CONSULTA_CRIADA: ${KAFKA_TOPIC_CONSULTA_CRIADA:-hospital.consultas.criadas.v1}
+      KAFKA_TOPIC_CONSULTA_ALTERADA: ${KAFKA_TOPIC_CONSULTA_ALTERADA:-hospital.consultas.alteradas.v1}
+      KAFKA_TOPIC_CONSULTA_DLT: ${KAFKA_TOPIC_CONSULTA_DLT:-hospital.consultas.dlt}
+      JWT_SECRET: ${JWT_SECRET:-ZmFrZS1qd3Qtc2VjcmV0LXNob3VsZC1iZS1sb25nLWVuY29kZWQ=}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-3600000}
+    ports:
+      - "${SCHEDULING_SERVICE_PORT:-8080}:${SCHEDULING_SERVICE_PORT:-8080}"
+
+  history-service:
+    build:
+      context: .
+      dockerfile: history-service/Dockerfile
+    container_name: ${HISTORY_CONTAINER_NAME:-history-service}
+    depends_on:
+      history-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: ${HISTORY_SERVICE_PORT:-8081}
+      SPRING_DATASOURCE_URL: ${HISTORY_DATASOURCE_URL:-jdbc:postgresql://history-db:5432/historydb}
+      SPRING_DATASOURCE_USERNAME: ${HISTORY_DB_USER:-history}
+      SPRING_DATASOURCE_PASSWORD: ${HISTORY_DB_PASSWORD:-history}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_INTERNAL_BOOTSTRAP_SERVERS:-kafka:9092}
+      KAFKA_TOPIC_CONSULTA_CRIADA: ${KAFKA_TOPIC_CONSULTA_CRIADA:-hospital.consultas.criadas.v1}
+      KAFKA_TOPIC_CONSULTA_ALTERADA: ${KAFKA_TOPIC_CONSULTA_ALTERADA:-hospital.consultas.alteradas.v1}
+      KAFKA_TOPIC_CONSULTA_DLT: ${KAFKA_TOPIC_CONSULTA_DLT:-hospital.consultas.dlt}
+      JWT_SECRET: ${JWT_SECRET:-ZmFrZS1qd3Qtc2VjcmV0LXNob3VsZC1iZS1sb25nLWVuY29kZWQ=}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-3600000}
+    ports:
+      - "${HISTORY_SERVICE_PORT:-8081}:${HISTORY_SERVICE_PORT:-8081}"
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    container_name: ${NOTIFICATION_CONTAINER_NAME:-notification-service}
+    depends_on:
+      notification-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: ${NOTIFICATION_SERVICE_PORT:-8082}
+      SPRING_DATASOURCE_URL: ${NOTIFICATION_DATASOURCE_URL:-jdbc:postgresql://notification-db:5432/notificationdb}
+      SPRING_DATASOURCE_USERNAME: ${NOTIFICATION_DB_USER:-notification}
+      SPRING_DATASOURCE_PASSWORD: ${NOTIFICATION_DB_PASSWORD:-notification}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_INTERNAL_BOOTSTRAP_SERVERS:-kafka:9092}
+      KAFKA_TOPIC_CONSULTA_CRIADA: ${KAFKA_TOPIC_CONSULTA_CRIADA:-hospital.consultas.criadas.v1}
+      KAFKA_TOPIC_CONSULTA_ALTERADA: ${KAFKA_TOPIC_CONSULTA_ALTERADA:-hospital.consultas.alteradas.v1}
+      KAFKA_TOPIC_CONSULTA_DLT: ${KAFKA_TOPIC_CONSULTA_DLT:-hospital.consultas.dlt}
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-8082}:${NOTIFICATION_SERVICE_PORT:-8082}"
