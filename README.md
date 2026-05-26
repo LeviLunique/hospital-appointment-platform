@@ -34,9 +34,23 @@ Fluxo principal:
 
 ## Execucao Local
 
-O arquivo `.env` na raiz do projeto centraliza portas, credenciais locais, URLs JDBC, nomes de containers, topicos Kafka e configuracao JWT. O Docker Compose carrega esse arquivo automaticamente.
+### Configurando o `.env`
 
-Suba todo o ambiente com um unico compose:
+O Docker Compose carrega automaticamente um arquivo `.env` na raiz do projeto, que centraliza portas, credenciais locais, URLs JDBC, nomes de containers, topicos Kafka e configuracao JWT. Esse arquivo **nao e versionado** (esta no `.gitignore` por conter senhas e o `JWT_SECRET`).
+
+Use o template `.env.example` como base:
+
+```bash
+cp .env.example .env
+```
+
+Em ambiente local nao e necessario editar nada para funcionar. Para outros ambientes, troque pelo menos:
+
+- `JWT_SECRET` (gere com `openssl rand -base64 48`)
+- `SCHEDULING_DB_PASSWORD`, `HISTORY_DB_PASSWORD`, `NOTIFICATION_DB_PASSWORD`
+- Senhas dos seed users (precisam casar com os hashes BCrypt das migrations Flyway; em producao prefira cadastrar usuarios via `POST /api/v1/users`)
+
+### Subindo a stack
 
 ```bash
 docker compose up --build
